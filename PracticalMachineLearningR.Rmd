@@ -1,0 +1,127 @@
+Practical Machine Learning - Prediction Assignment Writeup
+==========================================================
+
+author: "Kyaw Thu"
+date: "Tuesday, September 22, 2015"
+output: html_document
+
+#Introduction#
+Jawbone Up,Nike FuelBand, andFitbit are popular devices to measure the personal activities data inexpensively and conveniently.One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.
+
+In this project, targeted goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants and predict how they do their exercise. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+##Data Source##
+Training and test data are downloaded from the follwing link and located in Data folder:
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv> ;
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+
+Data need to be analysed about individual activity using caret and randomForest packages.
+To It will produce correct answers for each of the 20 test data cases provided in this assignment. 
+Seed value will be used for consistent results.
+
+#Required packages for prediction# 
+```{r}
+library(Hmisc)
+library(caret)
+library(randomForest)
+library(foreach)
+library(doParallel)
+set.seed(54321)
+options(warn=-1)
+```
+
+
+Some values contained a "#DIV/0!" that wii be replaced with an NA value.
+
+
+#Reading data sets#
+
+
+ 
+```{r}
+setwd("C:/Users/User/Desktop/Rdirectory/Practical-Machine-Learning")
+training_data <- read.csv("pml-training.csv", na.strings=c("#DIV/0!") )
+test_data <- read.csv("pml-testing.csv", na.strings=c("#DIV/0!") )
+```
+
+#Casting columns to be numeric from Col 8 to the end#
+
+```{r}
+for(i in c(8:ncol(training_data)-1)) {training_data[,i] = as.numeric(as.character(training_data[,i]))}
+
+for(i in c(8:ncol(test_data)-1)) {test_data[,i] = as.numeric(as.character(test_data[,i]))}
+```
+
+Some columns are in blanks. They do not contribute for prediction work. Complete column data will be named as "c-data" that are useful for processing.
+ 
+
+#Determining complete columns data#
+
+```{r}
+c_data <- colnames(training_data[colSums(is.na(training_data)) == 0])[-(1:7)]
+model_data <- training_data[c_data]
+c_data
+```
+
+We now have the model data built from our feature data set.
+We are using 60:40 proportion for train and test data.
+
+#Data Partition#
+
+```{r}
+idx <- createDataPartition(y=model_data$classe, p=0.60, list=FALSE )
+training <- model_data[idx,]
+testing <- model_data[-idx,]
+```
+
+ We make use of parallel processing with randomForest to improve processing speed.
+
+
+```{r}
+registerDoParallel()
+x <- training[-ncol(training)]
+y <- training$classe
+
+rf <- foreach(ntree=rep(150, 6), .combine=randomForest::combine, .packages='randomForest') %dopar% {
+randomForest(x, y, ntree=ntree) 
+}
+```
+
+#Report: Error in training and test data sets#
+```{r}
+predictions1 <- predict(rf, newdata=training)
+confusionMatrix(predictions1,training$classe)
+
+
+predictions2 <- predict(rf, newdata=testing)
+confusionMatrix(predictions2,testing$classe)
+```
+
+Conclusions and Test Data Submit
+--------------------------------
+
+Confusion matrix announced that this model is very accurate. PCA and other models are not good at accuracy, but this algorithm produce around 99% accurate I expected nearly all of the submitted test cases to be correct.  It turned out they were all correct.
+
+Prepare the submission. (using COURSERA provided code)
+
+```{r}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+
+x <- test_data
+x <- x[c_data[c_data!='classe']]
+answers <- predict(rf, newdata=x)
+
+answers
+
+pml_write_files(answers)
+```
